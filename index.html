@@ -1,0 +1,2809 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>研習時程表智能匯入工具 (詳盡LINE版) | Workshop Calendar Helper</title>
+    
+    <!-- 引入 SheetJS 處理 Excel 檔案 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <!-- 引入 PDF.js 處理 PDF 檔案 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    
+    <!-- 引入 Google API Client Library -->
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Microsoft JhengHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 24px;
+            box-shadow: 0 20px 80px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 50px 40px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: pulse 15s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 12px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .header p {
+            font-size: 1.15em;
+            opacity: 0.95;
+        }
+
+        .help-button {
+            background: rgba(255,255,255,0.2);
+            border: 2px solid white;
+            color: white;
+            padding: 12px 25px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+
+        .help-button:hover {
+            background: rgba(255,255,255,0.3);
+            transform: translateY(-2px);
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .section {
+            margin-bottom: 35px;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .section-title {
+            font-size: 1.4em;
+            color: #667eea;
+            margin-bottom: 20px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 5px;
+            height: 28px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 3px;
+        }
+
+        .input-group {
+            margin-bottom: 25px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 10px;
+            color: #333;
+            font-weight: 600;
+            font-size: 1.05em;
+        }
+
+        .input-group small {
+            display: block;
+            color: #666;
+            margin-top: 8px;
+            font-size: 0.9em;
+        }
+
+        .input-group input[type="text"],
+        .input-group input[type="password"],
+        .input-group textarea,
+        .input-group select {
+            width: 100%;
+            padding: 14px 18px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 1em;
+            transition: all 0.3s;
+            font-family: inherit;
+            background: white;
+        }
+
+        .input-group input:focus,
+        .input-group textarea:focus,
+        .input-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+        }
+
+        .input-group textarea {
+            min-height: 180px;
+            resize: vertical;
+            line-height: 1.6;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+            border-bottom: 2px solid #e0e0e0;
+            flex-wrap: wrap;
+        }
+
+        .tab {
+            padding: 12px 20px;
+            border: none;
+            background: transparent;
+            color: #666;
+            font-size: 1.05em;
+            font-weight: 600;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+            position: relative;
+            top: 2px;
+            white-space: nowrap;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab:hover {
+            color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .file-upload {
+            border: 3px dashed #667eea;
+            border-radius: 16px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .file-upload:hover {
+            background: rgba(102, 126, 234, 0.12);
+            border-color: #764ba2;
+            transform: scale(1.02);
+        }
+
+        .file-upload input[type="file"] {
+            display: none;
+        }
+
+        .file-upload-icon {
+            font-size: 4em;
+            margin-bottom: 15px;
+        }
+
+        .file-upload-text {
+            font-size: 1.1em;
+            color: #667eea;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .file-upload-hint {
+            font-size: 0.9em;
+            color: #999;
+            line-height: 1.6;
+        }
+
+        .format-hint {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.08));
+            padding: 15px 18px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            font-size: 0.95em;
+            border-left: 4px solid #667eea;
+            line-height: 1.6;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 18px 30px;
+            font-size: 1.15em;
+            font-weight: 600;
+            border: none;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.35);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 35px rgba(102, 126, 234, 0.45);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #2e7d32 0%, #388e3c 100%);
+            color: white;
+            box-shadow: 0 8px 25px rgba(46, 125, 50, 0.35);
+        }
+
+        .btn-secondary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 35px rgba(46, 125, 50, 0.45);
+        }
+
+        .btn-clear-key {
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 14px 18px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+
+        .btn-clear-key:hover {
+            background: #d32f2f;
+            transform: translateY(-2px);
+        }
+
+        .reminder-options {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 12px;
+        }
+
+        .checkbox-option {
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 12px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .checkbox-option:hover {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .checkbox-option.checked {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .checkbox-option input[type="checkbox"] {
+            margin-right: 8px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .checkbox-option label {
+            cursor: pointer;
+            font-size: 1em;
+        }
+
+        .status-message {
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+            font-weight: 500;
+            display: none;
+            animation: slideIn 0.4s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .status-message.info {
+            background: #e3f2fd;
+            color: #1565c0;
+            border-left: 4px solid #1976d2;
+        }
+
+        .status-message.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border-left: 4px solid #4caf50;
+        }
+
+        .status-message.error {
+            background: #ffebee;
+            color: #c62828;
+            border-left: 4px solid #f44336;
+        }
+
+        .status-message.warning {
+            background: #fff3e0;
+            color: #e65100;
+            border-left: 4px solid #ff9800;
+        }
+
+        .events-preview {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 25px;
+            margin-top: 25px;
+            display: none;
+        }
+
+        .events-preview.show {
+            display: block;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .event-item {
+            background: white;
+            padding: 18px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .event-title {
+            font-weight: 600;
+            color: #333;
+            font-size: 1.1em;
+            margin-bottom: 8px;
+        }
+
+        .event-time {
+            color: #666;
+            font-size: 0.95em;
+            margin-bottom: 5px;
+        }
+
+        .event-location {
+            color: #667eea;
+            font-size: 0.9em;
+        }
+
+        .event-time-block {
+            margin: 10px 0;
+        }
+
+        .event-date {
+            color: #444;
+            font-size: 1em;
+            margin-bottom: 6px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .day-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 3px 12px;
+            border-radius: 6px;
+            font-size: 0.85em;
+            font-weight: 600;
+            box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
+        }
+
+        .additional-notes-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 2px dashed #e0e0e0;
+        }
+
+        .additional-notes-label {
+            display: block;
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 8px;
+            font-size: 1em;
+        }
+
+        .optional-hint {
+            color: #999;
+            font-size: 0.85em;
+            font-weight: 400;
+            margin-left: 5px;
+        }
+
+        .additional-notes-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 0.95em;
+            font-family: inherit;
+            resize: vertical;
+            transition: all 0.3s;
+            background: #fafafa;
+        }
+
+        .additional-notes-input:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .additional-notes-input::placeholder {
+            color: #aaa;
+        }
+
+        .btn-delete-event {
+            background: white;
+            color: #f44336;
+            border: 2px solid #f44336;
+            border-radius: 8px;
+            padding: 6px 14px;
+            font-size: 0.9em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            white-space: nowrap;
+            flex-shrink: 0;
+            margin-left: 10px;
+        }
+
+        .btn-delete-event:hover {
+            background: #f44336;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+        }
+
+        .btn-delete-event:active {
+            transform: translateY(0);
+        }
+
+        .event-item.deleted {
+            opacity: 0.4;
+            position: relative;
+        }
+
+        .event-item.deleted::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: #f44336;
+            transform: translateY(-50%);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .file-count-badge {
+            display: inline-block;
+            background: #4caf50;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        /* 幫助中心模態視窗 */
+        .help-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 999999;
+            overflow-y: auto;
+        }
+        
+        .help-modal.show {
+            display: flex !important;
+        }
+        
+        .help-modal-content {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 3px solid #667eea;
+            border-radius: 20px;
+            max-width: 900px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 40px;
+            color: white;
+            margin: 20px;
+        }
+        
+        .help-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        
+        .help-modal h2 {
+            color: white;
+            font-size: 2em;
+        }
+        
+        .close-button {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 0, 0, 0.2);
+            border: 2px solid #ff0000;
+            border-radius: 50%;
+            color: #ff0000;
+            font-size: 1.5em;
+            cursor: pointer;
+            transition: all 0.3s;
+            flex-shrink: 0;
+        }
+        
+        .close-button:hover {
+            background: rgba(255, 0, 0, 0.4);
+            transform: rotate(90deg);
+        }
+
+        .help-tabs-container {
+            margin-bottom: 30px;
+            border-bottom: 2px solid rgba(102, 126, 234, 0.3);
+        }
+
+        .help-tabs {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+
+        .help-tab {
+            padding: 12px 20px;
+            background: rgba(102, 126, 234, 0.1);
+            border: none;
+            border-radius: 10px 10px 0 0;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 600;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+
+        .help-tab.active {
+            background: rgba(102, 126, 234, 0.3);
+            color: white;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .help-tab:hover {
+            background: rgba(102, 126, 234, 0.2);
+            color: white;
+        }
+
+        .help-tab-content {
+            display: none;
+        }
+
+        .help-tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .help-content h3 {
+            color: #667eea;
+            margin: 25px 0 15px 0;
+            font-size: 1.3em;
+        }
+
+        .help-content h4 {
+            color: #88a3f5;
+            margin: 20px 0 10px 0;
+            font-size: 1.1em;
+        }
+
+        .help-content p {
+            line-height: 1.8;
+            margin: 10px 0;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .help-content ul, .help-content ol {
+            margin: 10px 0 10px 20px;
+            line-height: 1.8;
+        }
+
+        .help-content li {
+            margin: 8px 0;
+            color: rgba(255, 255, 255, 0.85);
+        }
+
+        .help-content code {
+            background: rgba(102, 126, 234, 0.2);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            color: #a8d5ff;
+            font-size: 0.9em;
+        }
+
+        .help-content pre {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+
+        .help-content pre code {
+            background: none;
+            padding: 0;
+            color: #a8d5ff;
+            font-size: 0.85em;
+            line-height: 1.6;
+        }
+
+        .warning-box {
+            background: rgba(255, 152, 0, 0.15);
+            border-left: 4px solid #ff9800;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+        }
+
+        .warning-box strong {
+            color: #ffa726;
+        }
+
+        .info-box {
+            background: rgba(33, 150, 243, 0.15);
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+        }
+
+        .info-box strong {
+            color: #64b5f6;
+        }
+
+        .success-box {
+            background: rgba(76, 175, 80, 0.15);
+            border-left: 4px solid #4caf50;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+        }
+
+        .success-box strong {
+            color: #81c784;
+        }
+
+        .step-box {
+            background: rgba(102, 126, 234, 0.1);
+            border: 2px solid rgba(102, 126, 234, 0.3);
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 12px;
+        }
+
+        .step-number {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 32px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        /* 模態視窗 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+
+        .modal-overlay.show .modal-content {
+            transform: scale(1);
+        }
+
+        .modal-icon {
+            font-size: 4em;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 2em;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .modal-message {
+            font-size: 1.1em;
+            text-align: center;
+            color: #666;
+            margin-bottom: 25px;
+            line-height: 1.6;
+        }
+
+        .result-details {
+            max-height: 300px;
+            overflow-y: auto;
+            margin: 20px 0;
+        }
+
+        .result-item {
+            padding: 10px 15px;
+            margin: 8px 0;
+            border-radius: 8px;
+            font-size: 0.95em;
+        }
+
+        .result-success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border-left: 4px solid #4caf50;
+        }
+
+        .result-fail {
+            background: #ffebee;
+            color: #c62828;
+            border-left: 4px solid #f44336;
+        }
+
+        .modal-btn {
+            padding: 14px 28px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.05em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .modal-btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .modal-btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .modal-btn-secondary {
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .modal-btn-secondary:hover {
+            background: #d0d0d0;
+            transform: translateY(-2px);
+        }
+
+        .footer {
+            text-align: center;
+            padding: 30px 40px;
+            background: #f8f9fa;
+            color: #666;
+            font-size: 0.95em;
+        }
+
+        .footer p {
+            margin: 5px 0;
+        }
+
+        .api-key-hint {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.08));
+            padding: 12px 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            font-size: 0.95em;
+            border-left: 4px solid #667eea;
+        }
+
+        .api-key-hint a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .api-key-hint a:hover {
+            text-decoration: underline;
+        }
+
+        .ocr-tips {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+
+        .ocr-tips strong {
+            color: #e65100;
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        .ocr-tips-item {
+            margin: 6px 0;
+            padding-left: 8px;
+            color: #5d4037;
+            line-height: 1.6;
+        }
+
+        .preview-image {
+            max-width: 100%;
+            border-radius: 12px;
+            margin-top: 15px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 本機儲存警告 */
+        .storage-warning {
+            background: rgba(244, 67, 54, 0.1);
+            border: 2px solid #f44336;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .storage-warning h4 {
+            color: #f44336;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+        }
+
+        .storage-warning ul {
+            margin: 10px 0 10px 20px;
+            color: #c62828;
+        }
+
+        .storage-warning li {
+            margin: 5px 0;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2em;
+            }
+
+            .header p {
+                font-size: 1em;
+            }
+
+            .content {
+                padding: 25px;
+            }
+
+            .tabs {
+                gap: 5px;
+            }
+
+            .tab {
+                padding: 10px 15px;
+                font-size: 0.95em;
+            }
+
+            .reminder-options {
+                grid-template-columns: 1fr;
+            }
+
+            .help-modal-content {
+                padding: 25px;
+            }
+
+            .help-tabs {
+                gap: 3px;
+            }
+
+            .help-tab {
+                padding: 10px 12px;
+                font-size: 0.85em;
+            }
+
+            .auth-digits {
+                gap: 5px;
+            }
+
+            .auth-digit {
+                width: 40px;
+                height: 50px;
+                font-size: 1.5em;
+            }
+        }
+
+        /* ============================================
+           🚀 酷炫科技風開機動畫 Splash Screen
+           ============================================ */
+        .splash-screen {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1a 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 99999;
+            overflow: hidden;
+            transition: opacity 0.8s ease, visibility 0.8s ease;
+        }
+
+        .splash-screen.hide {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        /* 背景網格動畫 */
+        .splash-grid {
+            position: absolute;
+            inset: 0;
+            background-image: 
+                linear-gradient(rgba(102, 126, 234, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(102, 126, 234, 0.05) 1px, transparent 1px);
+            background-size: 40px 40px;
+            animation: gridPulse 4s ease-in-out infinite;
+        }
+
+        @keyframes gridPulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.6; }
+        }
+
+        /* 飄浮粒子 */
+        .splash-particles {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+        }
+
+        .splash-particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #667eea;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #667eea, 0 0 20px #667eea;
+            animation: particleRise 6s ease-in-out infinite;
+        }
+
+        .splash-particle:nth-child(1) { left: 10%; animation-delay: 0s; }
+        .splash-particle:nth-child(2) { left: 20%; animation-delay: 1s; background: #764ba2; box-shadow: 0 0 10px #764ba2; }
+        .splash-particle:nth-child(3) { left: 30%; animation-delay: 2s; }
+        .splash-particle:nth-child(4) { left: 40%; animation-delay: 0.5s; background: #a855f7; box-shadow: 0 0 10px #a855f7; }
+        .splash-particle:nth-child(5) { left: 50%; animation-delay: 1.5s; }
+        .splash-particle:nth-child(6) { left: 60%; animation-delay: 2.5s; background: #764ba2; box-shadow: 0 0 10px #764ba2; }
+        .splash-particle:nth-child(7) { left: 70%; animation-delay: 0.8s; }
+        .splash-particle:nth-child(8) { left: 80%; animation-delay: 1.8s; background: #a855f7; box-shadow: 0 0 10px #a855f7; }
+        .splash-particle:nth-child(9) { left: 90%; animation-delay: 2.8s; }
+
+        @keyframes particleRise {
+            0% { transform: translateY(100vh) scale(0); opacity: 0; }
+            10% { opacity: 1; transform: scale(1); }
+            90% { opacity: 1; }
+            100% { transform: translateY(-100vh) scale(0.5); opacity: 0; }
+        }
+
+        /* Logo 容器 */
+        .splash-logo-container {
+            position: relative;
+            width: 180px;
+            height: 180px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 40px;
+        }
+
+        /* 外層旋轉環 */
+        .splash-ring {
+            position: absolute;
+            border: 3px solid transparent;
+            border-radius: 50%;
+            animation: ringRotate linear infinite;
+        }
+
+        .splash-ring-1 {
+            width: 180px;
+            height: 180px;
+            border-top-color: #667eea;
+            border-right-color: #667eea;
+            animation-duration: 3s;
+            filter: drop-shadow(0 0 8px #667eea);
+        }
+
+        .splash-ring-2 {
+            width: 150px;
+            height: 150px;
+            border-bottom-color: #764ba2;
+            border-left-color: #764ba2;
+            animation-duration: 2.5s;
+            animation-direction: reverse;
+            filter: drop-shadow(0 0 8px #764ba2);
+        }
+
+        .splash-ring-3 {
+            width: 120px;
+            height: 120px;
+            border-top-color: #a855f7;
+            animation-duration: 2s;
+            filter: drop-shadow(0 0 8px #a855f7);
+        }
+
+        @keyframes ringRotate {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 中心 Logo */
+        .splash-logo-inner {
+            width: 90px;
+            height: 90px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            animation: logoSpin 2s ease-in-out, logoPulse 2s ease-in-out infinite 2s;
+            box-shadow: 0 0 40px rgba(102, 126, 234, 0.6);
+            z-index: 10;
+        }
+
+        @keyframes logoSpin {
+            0% { transform: rotateY(0deg) scale(0.3); opacity: 0; }
+            50% { transform: rotateY(180deg) scale(1.1); }
+            100% { transform: rotateY(360deg) scale(1); opacity: 1; }
+        }
+
+        @keyframes logoPulse {
+            0%, 100% { box-shadow: 0 0 40px rgba(102, 126, 234, 0.6); }
+            50% { box-shadow: 0 0 60px rgba(102, 126, 234, 0.9), 0 0 80px rgba(118, 75, 162, 0.5); }
+        }
+
+        /* 軌道粒子 */
+        .orbit-particle {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: #667eea;
+            border-radius: 50%;
+            box-shadow: 0 0 12px #667eea;
+        }
+
+        .orbit-particle:nth-child(1) { animation: orbit1 3s linear infinite; }
+        .orbit-particle:nth-child(2) { animation: orbit2 2.5s linear infinite; background: #764ba2; box-shadow: 0 0 12px #764ba2; }
+        .orbit-particle:nth-child(3) { animation: orbit3 2s linear infinite; background: #a855f7; box-shadow: 0 0 12px #a855f7; }
+
+        @keyframes orbit1 {
+            0% { transform: rotate(0deg) translateX(90px) rotate(0deg); }
+            100% { transform: rotate(360deg) translateX(90px) rotate(-360deg); }
+        }
+        @keyframes orbit2 {
+            0% { transform: rotate(120deg) translateX(75px) rotate(-120deg); }
+            100% { transform: rotate(480deg) translateX(75px) rotate(-480deg); }
+        }
+        @keyframes orbit3 {
+            0% { transform: rotate(240deg) translateX(60px) rotate(-240deg); }
+            100% { transform: rotate(600deg) translateX(60px) rotate(-600deg); }
+        }
+
+        /* 標題文字 */
+        .splash-title {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #a855f7 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            opacity: 0;
+            animation: textFadeUp 0.8s ease forwards 1s;
+            text-align: center;
+        }
+
+        .splash-subtitle {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 12px;
+            opacity: 0;
+            animation: textFadeUp 0.8s ease forwards 1.3s;
+        }
+
+        @keyframes textFadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 載入進度條 */
+        .splash-progress {
+            width: 200px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            margin-top: 40px;
+            overflow: hidden;
+            opacity: 0;
+            animation: textFadeUp 0.8s ease forwards 1.6s;
+        }
+
+        .splash-progress-bar {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2, #a855f7);
+            border-radius: 2px;
+            animation: progressFill 2s ease forwards 1.8s;
+        }
+
+        @keyframes progressFill {
+            0% { width: 0%; }
+            100% { width: 100%; }
+        }
+
+        /* 載入點點 */
+        .splash-dots {
+            display: flex;
+            gap: 8px;
+            margin-top: 20px;
+            opacity: 0;
+            animation: textFadeUp 0.8s ease forwards 1.9s;
+        }
+
+        .splash-dots span {
+            width: 8px;
+            height: 8px;
+            background: #667eea;
+            border-radius: 50%;
+            animation: dotBounce 1.4s ease-in-out infinite;
+        }
+
+        .splash-dots span:nth-child(2) { animation-delay: 0.2s; background: #764ba2; }
+        .splash-dots span:nth-child(3) { animation-delay: 0.4s; background: #a855f7; }
+
+        @keyframes dotBounce {
+            0%, 80%, 100% { transform: scale(1); opacity: 0.5; }
+            40% { transform: scale(1.3); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <!-- 🚀 開機動畫 Splash Screen -->
+    <div class="splash-screen" id="splashScreen">
+        <div class="splash-grid"></div>
+        <div class="splash-particles">
+            <div class="splash-particle"></div>
+            <div class="splash-particle"></div>
+            <div class="splash-particle"></div>
+            <div class="splash-particle"></div>
+            <div class="splash-particle"></div>
+            <div class="splash-particle"></div>
+            <div class="splash-particle"></div>
+            <div class="splash-particle"></div>
+            <div class="splash-particle"></div>
+        </div>
+        <div class="splash-logo-container">
+            <div class="splash-ring splash-ring-1"></div>
+            <div class="splash-ring splash-ring-2"></div>
+            <div class="splash-ring splash-ring-3"></div>
+            <div class="splash-logo-inner">📅</div>
+            <div class="orbit-particle"></div>
+            <div class="orbit-particle"></div>
+            <div class="orbit-particle"></div>
+        </div>
+        <div class="splash-title">研習時程表智能匯入工具</div>
+        <div class="splash-subtitle">AI 驅動的智能研習管理系統</div>
+        <div class="splash-progress">
+            <div class="splash-progress-bar"></div>
+        </div>
+        <div class="splash-dots">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+    </div>
+    <div class="container">
+        <div class="header">
+            <div class="header-content">
+                <div>
+                    <h1>📅 研習時程表智能匯入工具</h1>
+                    <p>AI 驅動的智能研習管理系統 ⚡ 詳盡 LINE 通知版 (支援民國年)</p>
+                </div>
+                <button class="help-button" onclick="openHelp()">
+                    📚 幫助中心
+                </button>
+            </div>
+        </div>
+
+        <div class="content">
+            <!-- 本機儲存設定 -->
+            <div class="section">
+                <div class="section-title">💾 本機自動儲存設定</div>
+                
+                <div class="storage-warning">
+                    <h4>⚠️ 重要安全警告</h4>
+                    <ul>
+                        <li><strong>敏感資訊風險：</strong>啟用本機儲存將在您的電腦中儲存 API 金鑰等敏感資訊</li>
+                        <li><strong>共用電腦風險：</strong>如果使用共用或公用電腦，其他人可能存取這些資訊</li>
+                        <li><strong>禁止分享：</strong>絕對不要將啟用本機儲存的此工具分享給他人</li>
+                        <li><strong>建議做法：</strong>僅在個人私有電腦上使用此功能</li>
+                    </ul>
+                </div>
+
+                <div class="input-group">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                        <input type="checkbox" id="enableLocalStorage" onchange="toggleLocalStorage(this)" style="width: 20px; height: 20px;">
+                        <span>啟用本機自動儲存 API 金鑰（我已了解風險）</span>
+                    </label>
+                    <small style="color: #f44336; font-weight: 500;">
+                        ⚠️ 僅在您完全信任此裝置時啟用此功能
+                    </small>
+                </div>
+            </div>
+
+            <!-- API Key 設定 -->
+            <div class="section">
+                <div class="section-title">🔑 API 金鑰設定</div>
+                
+                <!-- Google OAuth 設置 -->
+                <div class="input-group">
+                    <label for="googleClientId">Google OAuth Client ID（用於自動儲存至日曆）</label>
+                    <div style="display: flex; gap: 10px; align-items: stretch;">
+                        <div style="flex: 1; position: relative;">
+                            <input type="password" id="googleClientId" placeholder="輸入您的 Google OAuth Client ID" style="width: 100%; padding-right: 45px;">
+                            <button type="button" onclick="toggleClientIdVisibility()" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 1.2em; padding: 5px;" title="顯示/隱藏">
+                                <span id="clientIdEyeIcon">👁️</span>
+                            </button>
+                        </div>
+                        <button class="btn-clear-key" onclick="clearGoogleClientId()" title="清除 Client ID">
+                            🗑️ 清除
+                        </button>
+                    </div>
+                    <small style="color: #1976d2; font-weight: 500; display: flex; align-items: flex-start; gap: 5px; margin-top: 8px;">
+                        <span>ℹ️</span>
+                        <span>設定教學請點擊右上角「📚 幫助中心」→「🔐 Google OAuth」</span>
+                    </small>
+                    <div id="authStatus" style="margin-top: 10px; display: none;"></div>
+                    <button id="authorizeButton" class="btn-secondary" style="margin-top: 10px; display: none; width: auto; padding: 10px 20px;" onclick="handleAuthClick()">
+                        🔐 授權存取 Google 日曆
+                    </button>
+                </div>
+                
+                <!-- Gemini API Key -->
+                <div class="input-group">
+                    <label for="geminiApiKey">
+                        Gemini API Key
+                        <span style="color: #4caf50; font-size: 0.85em; margin-left: 8px;">（可選 - 不填也能用）</span>
+                    </label>
+                    <div style="display: flex; gap: 10px; align-items: stretch;">
+                        <div style="flex: 1; position: relative;">
+                            <input type="password" id="geminiApiKey" placeholder="選填：輸入 API Key 可使用 AI 智能解析（更準確）" style="width: 100%; padding-right: 45px;">
+                            <button type="button" onclick="toggleApiKeyVisibility()" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 1.2em; padding: 5px;" title="顯示/隱藏">
+                                <span id="eyeIcon">👁️</span>
+                            </button>
+                        </div>
+                        <button class="btn-clear-key" onclick="clearApiKey()" title="清除金鑰">
+                            🗑️ 清除
+                        </button>
+                    </div>
+                    <small style="color: #1976d2; font-weight: 500; display: flex; align-items: center; gap: 5px; margin-top: 8px;">
+                        <span>💡</span>
+                        <span>設定教學請點擊右上角「📚 幫助中心」→「🤖 Gemini API」</span>
+                    </small>
+                </div>
+            </div>
+
+            <!-- LINE 通知設定 -->
+            <div class="section">
+                <div class="section-title">
+                    📱 LINE 通知設定
+                    <span style="font-size: 0.7em; color: #4caf50; margin-left: 10px;">⚡ 詳盡版 v2.0</span>
+                </div>
+                
+                <!-- LINE Bot Token -->
+                <div class="input-group">
+                    <label for="lineChannelAccessToken">LINE Channel Access Token</label>
+                    <div style="display: flex; gap: 10px; align-items: stretch;">
+                        <div style="flex: 1; position: relative;">
+                            <input type="password" id="lineChannelAccessToken" placeholder="輸入您的 LINE Channel Access Token" style="width: 100%; padding-right: 45px;">
+                            <button type="button" onclick="toggleLineTokenVisibility()" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 1.2em; padding: 5px;" title="顯示/隱藏">
+                                <span id="lineTokenEyeIcon">👁️</span>
+                            </button>
+                        </div>
+                        <button class="btn-clear-key" onclick="clearLineToken()" title="清除 Token">
+                            🗑️ 清除
+                        </button>
+                    </div>
+                </div>
+
+                <!-- LINE User ID -->
+                <div class="input-group">
+                    <label for="lineUserId">您的 LINE User ID</label>
+                    <div style="display: flex; gap: 10px; align-items: stretch;">
+                        <div style="flex: 1; position: relative;">
+                            <input type="password" id="lineUserId" placeholder="輸入您的 LINE User ID（例如：U1234567890abcdef...）" style="width: 100%; padding-right: 45px;">
+                            <button type="button" onclick="toggleLineUserIdVisibility()" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 1.2em; padding: 5px;" title="顯示/隱藏">
+                                <span id="lineUserIdEyeIcon">👁️</span>
+                            </button>
+                        </div>
+                        <button class="btn-clear-key" onclick="clearLineUserId()" title="清除 User ID">
+                            🗑️ 清除
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Google Apps Script URL -->
+                <div class="input-group">
+                    <label for="gasWebAppUrl">Google Apps Script 網址</label>
+                    <div style="display: flex; gap: 10px; align-items: stretch;">
+                        <div style="flex: 1; position: relative;">
+                            <input type="password" id="gasWebAppUrl" placeholder="輸入您部署的 GAS Web App URL" style="width: 100%; padding-right: 45px;">
+                            <button type="button" onclick="toggleGasUrlVisibility()" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 1.2em; padding: 5px;" title="顯示/隱藏">
+                                <span id="gasUrlEyeIcon">👁️</span>
+                            </button>
+                        </div>
+                        <button class="btn-clear-key" onclick="clearGasUrl()" title="清除網址">
+                            🗑️ 清除
+                        </button>
+                    </div>
+                    
+                    <label for="gasSecretKey" style="margin-top: 20px; display: block;">🔐 安全金鑰 (Secret Key)</label>
+                    <div style="display: flex; gap: 10px; align-items: stretch;">
+                        <div style="flex: 1; position: relative;">
+                            <input type="password" id="gasSecretKey" placeholder="輸入 GAS 中設定的 SECURITY_SECRET" style="width: 100%; padding-right: 45px;">
+                            <button type="button" onclick="toggleSecretKeyVisibility()" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 1.2em; padding: 5px;" title="顯示/隱藏">
+                                <span id="secretKeyEyeIcon">👁️</span>
+                            </button>
+                        </div>
+                        <button class="btn-clear-key" onclick="clearSecretKey()" title="清除金鑰">
+                            🗑️ 清除
+                        </button>
+                    </div>
+                    <small style="color: #1976d2; font-weight: 500; display: flex; align-items: flex-start; gap: 5px; margin-top: 8px;">
+                        <span>ℹ️</span>
+                        <span>完整設定教學請點擊右上角「📚 幫助中心」→「📱 LINE 設定」</span>
+                    </small>
+                    
+                    <!-- 詳盡版功能說明 -->
+                    <div style="margin-top: 15px; padding: 12px; background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%); border-left: 4px solid #4caf50; border-radius: 8px;">
+                        <div style="font-weight: bold; color: #2e7d32; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span>⚡</span>
+                            <span>詳盡版 LINE 通知特色</span>
+                        </div>
+                        <div style="font-size: 0.9em; color: #558b2f; line-height: 1.6;">
+                            ✅ 自動計算研習時長<br>
+                            ✅ 智能倒數提醒 (今天/明天/X天後)<br>
+                            ✅ 統計總場次與總時數<br>
+                            ✅ 美觀框線與分層結構<br>
+                            ✅ 完整講師與課程資訊
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 測試按鈕 -->
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn-secondary" onclick="testLineNotification()" style="flex: 1;">
+                        📨 測試 LINE 通知
+                    </button>
+                </div>
+
+                <!-- LINE 通知選項 -->
+                <div class="input-group" style="margin-top: 20px;">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                        <input type="checkbox" id="autoSendToLine" onchange="updateLineSendOption(this)" style="width: 20px; height: 20px;">
+                        <span>解析完成後自動發送到 LINE</span>
+                    </label>
+                </div>
+                
+                <!-- 🔔 研習提醒排程設定 -->
+                <div class="input-group" style="margin-top: 25px; padding-top: 20px; border-top: 2px dashed #e0e0e0;">
+                    <label style="display: block; font-weight: 600; color: #667eea; margin-bottom: 15px; font-size: 1.1em;">
+                        🔔 研習提前提醒設定
+                        <span style="font-weight: normal; font-size: 0.85em; color: #888; display: block; margin-top: 5px;">
+                            勾選後，系統會在研習開始前自動發送 LINE 提醒
+                        </span>
+                    </label>
+                    
+                    <!-- 提醒時間選項 -->
+                    <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 15px;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px 15px; background: #f8f9fa; border-radius: 10px; transition: all 0.2s;">
+                            <input type="checkbox" id="reminder1Day" onchange="saveReminderSettings()" style="width: 18px; height: 18px; accent-color: #667eea;">
+                            <span style="flex: 1;">📅 研習前 <strong style="color: #667eea;">1 天</strong> 提醒</span>
+                            <span style="font-size: 0.85em; color: #888;">前一天同時間</span>
+                        </label>
+                        
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px 15px; background: #f8f9fa; border-radius: 10px; transition: all 0.2s;">
+                            <input type="checkbox" id="reminder2Hours" onchange="saveReminderSettings()" style="width: 18px; height: 18px; accent-color: #667eea;">
+                            <span style="flex: 1;">⏰ 研習前 <strong style="color: #667eea;">2 小時</strong> 提醒</span>
+                            <span style="font-size: 0.85em; color: #888;">充足準備時間</span>
+                        </label>
+                        
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px 15px; background: #f8f9fa; border-radius: 10px; transition: all 0.2s;">
+                            <input type="checkbox" id="reminder1Hour" onchange="saveReminderSettings()" style="width: 18px; height: 18px; accent-color: #667eea;">
+                            <span style="flex: 1;">⚡ 研習前 <strong style="color: #667eea;">1 小時</strong> 提醒</span>
+                            <span style="font-size: 0.85em; color: #888;">最後確認</span>
+                        </label>
+                        
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px 15px; background: #f8f9fa; border-radius: 10px; transition: all 0.2s;">
+                            <input type="checkbox" id="reminder30Min" onchange="saveReminderSettings()" style="width: 18px; height: 18px; accent-color: #667eea;">
+                            <span style="flex: 1;">🚀 研習前 <strong style="color: #667eea;">30 分鐘</strong> 提醒</span>
+                            <span style="font-size: 0.85em; color: #888;">即時提醒</span>
+                        </label>
+                    </div>
+                    
+                    <!-- 提醒排程狀態 -->
+                    <div id="reminderScheduleStatus" style="display: none; margin-top: 15px; padding: 15px; border-radius: 10px; background: #e8f5e9;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 1.5em;">✅</span>
+                            <div>
+                                <div style="font-weight: 600; color: #2e7d32;">提醒排程已啟用</div>
+                                <div id="reminderScheduleInfo" style="font-size: 0.9em; color: #558b2f; margin-top: 3px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 提醒說明 -->
+                    <div style="margin-top: 15px; padding: 12px 15px; background: #fff3e0; border-radius: 10px; border-left: 4px solid #ff9800;">
+                        <div style="display: flex; align-items: flex-start; gap: 10px;">
+                            <span style="font-size: 1.2em;">💡</span>
+                            <div style="font-size: 0.9em; color: #e65100; line-height: 1.6;">
+                                <strong>運作方式：</strong><br>
+                                • 匯入研習時，系統會自動建立提醒排程<br>
+                                • GAS 後端每 15 分鐘檢查一次<br>
+                                • 到達提醒時間時自動發送 LINE 通知<br>
+                                • 需要部署新版 GAS（含排程功能）
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 管理排程按鈕 -->
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button class="btn-secondary" onclick="viewScheduledReminders()" style="flex: 1;">
+                            📋 查看排程
+                        </button>
+                        <button class="btn-secondary" onclick="clearAllReminders()" style="flex: 1; background: #ffebee; color: #c62828; border-color: #ef9a9a;">
+                            🗑️ 清除全部
+                        </button>
+                    </div>
+                </div>
+
+                <!-- LINE 通知狀態 -->
+                <div id="lineNotifyStatus" style="margin-top: 15px; display: none;"></div>
+            </div>
+
+            <!-- 輸入方式選擇 -->
+            <div class="section">
+                <div class="section-title">📝 輸入研習時程表</div>
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab('text')">📄 文字輸入</button>
+                    <button class="tab" onclick="switchTab('file')">📎 檔案上傳</button>
+                    <button class="tab" onclick="switchTab('image')">🖼️ 圖片上傳</button>
+                </div>
+
+                <!-- 文字輸入 -->
+                <div class="tab-content active" id="text-content">
+                    <div class="input-group">
+                        <label for="scheduleText">請貼上研習時程表內容</label>
+                        <div class="format-hint">
+                            💡 <strong>支援格式：</strong>可直接貼上文字、複製自 Google Calendar、或任何包含時間資訊的文本<br>
+                            🇹🇼 <strong>支援民國年：</strong>自動將 114年 轉換為 2025年（民國年+1911=西元年）
+                        </div>
+                        <textarea id="scheduleText" placeholder="範例 1（完整格式）：
+2024年11月21日 19:00-20:30
+亮亮-Google Antigravity IDE 整合開發工具+ Sora2+AI Agent實境解謎
+地點：Google Meet (https://meet.google.com/wua-jbxm-km)
+講師：亮亮老師
+備註：#Google Antigravity #Sora2 #AI Agent
+
+範例 2（民國年格式）：
+114年12月5日 14:00-16:00 Python 程式設計入門
+地點：電腦教室 A
+講師：王老師
+
+範例 3（相對日期）：
+明天 09:00-12:00 AI 教學應用研習
+週五 13:30-15:30 數位教學工作坊"></textarea>
+                    </div>
+                </div>
+
+                <!-- 檔案上傳 -->
+                <div class="tab-content" id="file-content">
+                    <div class="input-group">
+                        <label>📎 檔案上傳支援格式 <span id="fileCountBadge" class="file-count-badge" style="display: none;">已累加 0 個檔案</span></label>
+                        <div class="format-hint">
+                            💡 <strong>支援格式：</strong>Excel (.xls, .xlsx)、文字檔 (.txt)、CSV (.csv)、PDF (.pdf)<br>
+                            <strong>累加模式：</strong>可多次上傳檔案，內容會自動累加合併
+                        </div>
+                    </div>
+                    <div class="file-upload" onclick="document.getElementById('fileUpload').click()">
+                        <input type="file" id="fileUpload" accept=".xls,.xlsx,.txt,.csv,.pdf" onchange="handleFileUpload(event)">
+                        <div class="file-upload-icon">📎</div>
+                        <div class="file-upload-text">點擊上傳研習時程表檔案</div>
+                        <div class="file-upload-hint">支援 Excel、TXT、CSV、PDF 格式（建議 5MB 以內）<br>支援多次上傳累加</div>
+                    </div>
+                    <div id="fileInfo" style="margin-top: 15px; display: none;">
+                        <div style="background: #e8f5e9; padding: 15px; border-radius: 10px; border-left: 4px solid #4caf50;">
+                            <div style="font-weight: 600; color: #2e7d32; margin-bottom: 5px;">✅ 檔案已載入</div>
+                            <div id="fileName" style="color: #666; font-size: 0.9em;"></div>
+                            <div id="fileSize" style="color: #999; font-size: 0.85em; margin-top: 3px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 圖片上傳 -->
+                <div class="tab-content" id="image-content">
+                    <div class="input-group">
+                        <label>📸 OCR 辨識最佳實踐 <span id="imageCountBadge" class="file-count-badge" style="display: none;">已累加 0 張圖片</span></label>
+                        <div class="ocr-tips">
+                            <strong>為獲得最佳辨識效果，請確保：</strong>
+                            <div class="ocr-tips-item">✓ 圖片清晰，光線充足，避免模糊</div>
+                            <div class="ocr-tips-item">✓ 文字水平擺放，避免傾斜或旋轉</div>
+                            <div class="ocr-tips-item">✓ 對焦準確，所有文字清楚可讀</div>
+                            <div class="ocr-tips-item">✓ 支援 Google Calendar 截圖、海報、文件等多種格式</div>
+                            <div class="ocr-tips-item">✓ <strong>累加模式：</strong>可多次上傳圖片，內容會自動累加合併</div>
+                        </div>
+                    </div>
+                    <div class="file-upload" onclick="document.getElementById('imageUpload').click()">
+                        <input type="file" id="imageUpload" accept="image/*" onchange="handleImageUpload(event)">
+                        <div class="file-upload-icon">📸</div>
+                        <div class="file-upload-text">點擊上傳研習時程表圖片</div>
+                        <div class="file-upload-hint">支援 JPG、PNG、WEBP 格式（建議 2MB 以內）<br>支援多次上傳累加</div>
+                    </div>
+                    <img id="imagePreview" class="preview-image" style="display: none;">
+                </div>
+            </div>
+
+            <!-- 提醒設定 -->
+            <div class="section">
+                <div class="section-title">⏰ 提醒設定</div>
+                <div class="reminder-options">
+                    <div class="checkbox-option">
+                        <input type="checkbox" id="remind30" value="30" onchange="updateCheckboxStyle(this)">
+                        <label for="remind30">提前 30 分鐘</label>
+                    </div>
+                    <div class="checkbox-option checked">
+                        <input type="checkbox" id="remind60" value="60" checked onchange="updateCheckboxStyle(this)">
+                        <label for="remind60">提前 1 小時</label>
+                    </div>
+                    <div class="checkbox-option">
+                        <input type="checkbox" id="remind90" value="90" onchange="updateCheckboxStyle(this)">
+                        <label for="remind90">提前 1.5 小時</label>
+                    </div>
+                    <div class="checkbox-option">
+                        <input type="checkbox" id="remind120" value="120" onchange="updateCheckboxStyle(this)">
+                        <label for="remind120">提前 2 小時</label>
+                    </div>
+                    <div class="checkbox-option">
+                        <input type="checkbox" id="remind1440" value="1440" onchange="updateCheckboxStyle(this)">
+                        <label for="remind1440">提前 1 天</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 執行按鈕 -->
+            <button class="btn btn-primary" onclick="parseSchedule()">
+                <span id="btnText">🚀 <span id="btnAction">AI 智能解析</span></span>
+                <span id="btnLoading" style="display: none;"><div class="loading"></div> <span id="loadingText">處理中...</span></span>
+            </button>
+
+            <!-- 狀態訊息 -->
+            <div id="statusMessage" class="status-message"></div>
+
+            <!-- 事件預覽 -->
+            <div id="eventsPreview" class="events-preview"></div>
+
+            <!-- 匯入選項按鈕 -->
+            <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 20px;" id="importButtonsContainer" style="display: none;">
+                <button class="btn btn-secondary" id="addToCalendarBtn" onclick="addToGoogleCalendar()" style="flex: 1; min-width: 200px; position: relative;">
+                    🔗 Google OAuth 匯入
+                    <div style="font-size: 0.85em; opacity: 0.9; margin-top: 5px;">
+                        <span id="serverStatusText">智能檢測環境中...</span>
+                    </div>
+                </button>
+                <button class="btn btn-primary" id="downloadIcsBtn" onclick="downloadICS()" style="flex: 1; min-width: 200px;">
+                    📥 下載 ICS 檔案
+                    <div style="font-size: 0.85em; opacity: 0.9; margin-top: 5px;">本機端可用</div>
+                </button>
+            </div>
+        </div>
+
+        <!-- 匯入結果彈出視窗 -->
+        <div id="resultModal" class="modal-overlay">
+            <div class="modal-content">
+                <div id="resultIcon" class="modal-icon">✅</div>
+                <div id="resultTitle" class="modal-title">匯入成功！</div>
+                <div id="resultMessage" class="modal-message">
+                    已成功將 <strong id="successCountDisplay">0</strong> 個事件自動匯入 Google 日曆
+                </div>
+                <div id="resultDetails" class="result-details"></div>
+                <div style="display: flex; gap: 15px; justify-content: center; margin-top: 25px; flex-wrap: wrap;">
+                    <button class="modal-btn modal-btn-primary" onclick="openGoogleCalendar()">
+                        📅 顯示日曆
+                    </button>
+                    <button class="modal-btn modal-btn-success" onclick="downloadICSFromModal()" style="background: linear-gradient(135deg, #43a047 0%, #2e7d32 100%);">
+                        📥 下載 ICS 檔案
+                    </button>
+                    <button class="modal-btn modal-btn-secondary" onclick="closeResultModal()">
+                        ✖️ 關閉視窗
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🚀 智能引導彈窗 -->
+        <div id="serverGuideModal" class="modal-overlay" style="display: none;">
+            <div class="modal-content" style="max-width: 700px;">
+                <div class="modal-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%); font-size: 3em;">
+                    ⚠️
+                </div>
+                <div class="modal-title" style="color: #f97316;">需要啟動本地伺服器</div>
+                <div class="modal-message" style="text-align: left; line-height: 1.8;">
+                    <p style="margin: 0 0 15px 0; color: #555; font-size: 1.05em;">
+                        Google OAuth 功能需要在本地伺服器環境下運行。檢測到您目前是從檔案系統直接開啟此頁面。
+                    </p>
+                </div>
+                
+                <div style="display: flex; gap: 15px; justify-content: center; margin-top: 25px; flex-wrap: wrap;">
+                    <button class="modal-btn modal-btn-secondary" onclick="closeServerGuideModal()">
+                        知道了
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Created with ❤️ for 教育工作者 | Powered by Gemini 2.0 Flash</p>
+            <p style="font-size: 0.95em; color: #667eea; margin-top: 8px; font-weight: 600;">
+                Made by Sone Wang 2025 1122 | 支援民國年轉換
+            </p>
+        </div>
+    </div>
+
+    <!-- 📚 幫助中心模態視窗 (簡化版) -->
+    <div class="help-modal" id="helpModal">
+        <div class="help-modal-content">
+            <div class="help-modal-header">
+                <h2>📚 幫助中心</h2>
+                <button class="close-button" onclick="closeHelp()">✖</button>
+            </div>
+            
+            <div class="help-content">
+                <h3>🇹🇼 民國年轉換功能</h3>
+                <p>本工具已支援自動識別並轉換民國年格式：</p>
+                <ul>
+                    <li><strong>公式：</strong>民國年 + 1911 = 西元年</li>
+                    <li><strong>範例：</strong>114年12月5日 → 2025-12-05</li>
+                    <li><strong>範例：</strong>115年9月22日 → 2026-09-22</li>
+                    <li><strong>範例：</strong>民國113年11月21日 → 2024-11-21</li>
+                </ul>
+                
+                <div class="info-box">
+                    <strong>💡 支援的民國年格式</strong><br>
+                    • 114年、民國114年、中華民國114年<br>
+                    • 114/12/05、114.12.05<br>
+                    • 研習編號中的日期（如 1140919 → 2025-09-19）
+                </div>
+                
+                <h3>🚀 快速開始</h3>
+                <ol>
+                    <li>輸入或貼上研習時程表（支援民國年格式）</li>
+                    <li>點擊「AI 智能解析」</li>
+                    <li>確認解析結果後，選擇匯入方式</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        console.log('=== 研習工具初始化開始 ===');
+        console.log('時間:', new Date().toLocaleString('zh-TW'));
+
+        // ========================================
+        // 全域變數
+        // ========================================
+        var parsedEvents = [];
+        var accessToken = null;
+        var tokenClient = null;
+        var gapiInited = false;
+        var gisInited = false;
+        var uploadedImagesArray = [];
+        var uploadedFilesContentArray = [];
+        var fileUploadCount = 0;
+        var imageUploadCount = 0;
+        const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
+        const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
+
+        // ========================================
+        // 民國年轉換輔助函數
+        // ========================================
+        function convertMinguoToWestern(text) {
+            if (!text) return text;
+            
+            // 轉換「民國XXX年」或「中華民國XXX年」格式
+            text = text.replace(/(?:民國|中華民國)?(\d{2,3})年(\d{1,2})月(\d{1,2})日?/g, function(match, year, month, day) {
+                var yearNum = parseInt(year);
+                if (yearNum <= 200) {
+                    yearNum += 1911;
+                }
+                return yearNum + '年' + month + '月' + day + '日';
+            });
+            
+            // 轉換「XXX/MM/DD」格式（民國年）
+            text = text.replace(/(\d{2,3})\/(\d{1,2})\/(\d{1,2})/g, function(match, year, month, day) {
+                var yearNum = parseInt(year);
+                if (yearNum <= 200) {
+                    yearNum += 1911;
+                }
+                return yearNum + '/' + month + '/' + day;
+            });
+            
+            return text;
+        }
+
+        // ========================================
+        // 本機儲存功能
+        // ========================================
+        var localStorageEnabled = false;
+        var STORAGE_PREFIX = 'workshop_tool_';
+
+        window.addEventListener('load', function() {
+            try {
+                var savedEnabled = localStorage.getItem(STORAGE_PREFIX + 'enabled');
+                if (savedEnabled === 'true') {
+                    localStorageEnabled = true;
+                    document.getElementById('enableLocalStorage').checked = true;
+                    loadFromLocalStorage();
+                }
+            } catch (e) {
+                console.log('無法讀取本機儲存');
+            }
+        });
+
+        function toggleLocalStorage(checkbox) {
+            if (checkbox.checked) {
+                if (confirm('⚠️ 警告：啟用本機儲存會在您的電腦中儲存 API 金鑰等敏感資訊。\n\n請確認：\n1. 這是您的個人私有電腦\n2. 您不會將此工具分享給他人\n3. 您了解並接受安全風險\n\n確定要啟用嗎？')) {
+                    localStorageEnabled = true;
+                    try {
+                        localStorage.setItem(STORAGE_PREFIX + 'enabled', 'true');
+                        saveToLocalStorage();
+                        showStatus('✅ 已啟用本機自動儲存', 'success');
+                    } catch (e) {
+                        showStatus('❌ 無法啟用本機儲存：' + e.message, 'error');
+                        checkbox.checked = false;
+                        localStorageEnabled = false;
+                    }
+                } else {
+                    checkbox.checked = false;
+                }
+            } else {
+                if (confirm('確定要停用本機儲存並清除所有已儲存的資料嗎？')) {
+                    localStorageEnabled = false;
+                    clearLocalStorage();
+                    showStatus('✅ 已停用本機儲存並清除資料', 'success');
+                } else {
+                    checkbox.checked = true;
+                }
+            }
+            setTimeout(hideStatus, 3000);
+        }
+
+        function saveToLocalStorage() {
+            if (!localStorageEnabled) return;
+            try {
+                localStorage.setItem(STORAGE_PREFIX + 'googleClientId', document.getElementById('googleClientId').value);
+                localStorage.setItem(STORAGE_PREFIX + 'geminiApiKey', document.getElementById('geminiApiKey').value);
+                localStorage.setItem(STORAGE_PREFIX + 'lineToken', document.getElementById('lineChannelAccessToken').value);
+                localStorage.setItem(STORAGE_PREFIX + 'lineUserId', document.getElementById('lineUserId').value);
+                localStorage.setItem(STORAGE_PREFIX + 'gasUrl', document.getElementById('gasWebAppUrl').value);
+                localStorage.setItem(STORAGE_PREFIX + 'gasSecret', document.getElementById('gasSecretKey').value);
+            } catch (e) {
+                console.error('儲存失敗:', e);
+            }
+        }
+
+        function loadFromLocalStorage() {
+            try {
+                var googleClientId = localStorage.getItem(STORAGE_PREFIX + 'googleClientId');
+                var geminiApiKey = localStorage.getItem(STORAGE_PREFIX + 'geminiApiKey');
+                var lineToken = localStorage.getItem(STORAGE_PREFIX + 'lineToken');
+                var lineUserId = localStorage.getItem(STORAGE_PREFIX + 'lineUserId');
+                var gasUrl = localStorage.getItem(STORAGE_PREFIX + 'gasUrl');
+                var gasSecret = localStorage.getItem(STORAGE_PREFIX + 'gasSecret');
+                
+                if (googleClientId) document.getElementById('googleClientId').value = googleClientId;
+                if (geminiApiKey) document.getElementById('geminiApiKey').value = geminiApiKey;
+                if (lineToken) document.getElementById('lineChannelAccessToken').value = lineToken;
+                if (lineUserId) document.getElementById('lineUserId').value = lineUserId;
+                if (gasUrl) document.getElementById('gasWebAppUrl').value = gasUrl;
+                if (gasSecret) document.getElementById('gasSecretKey').value = gasSecret;
+                
+                console.log('✅ 已從本機儲存載入設定');
+            } catch (e) {
+                console.error('載入失敗:', e);
+            }
+        }
+
+        function clearLocalStorage() {
+            try {
+                localStorage.removeItem(STORAGE_PREFIX + 'enabled');
+                localStorage.removeItem(STORAGE_PREFIX + 'googleClientId');
+                localStorage.removeItem(STORAGE_PREFIX + 'geminiApiKey');
+                localStorage.removeItem(STORAGE_PREFIX + 'lineToken');
+                localStorage.removeItem(STORAGE_PREFIX + 'lineUserId');
+                localStorage.removeItem(STORAGE_PREFIX + 'gasUrl');
+                localStorage.removeItem(STORAGE_PREFIX + 'gasSecret');
+            } catch (e) {
+                console.error('清除失敗:', e);
+            }
+        }
+
+        // ========================================
+        // 幫助中心功能
+        // ========================================
+        function openHelp() {
+            var modal = document.getElementById('helpModal');
+            if (modal) {
+                modal.classList.add('show');
+                modal.style.display = 'flex';
+            }
+        }
+        
+        function closeHelp() {
+            var modal = document.getElementById('helpModal');
+            if (modal) {
+                modal.classList.remove('show');
+                modal.style.display = 'none';
+            }
+        }
+
+        // ========================================
+        // Tab 切換功能
+        // ========================================
+        function switchTab(tabName) {
+            var tabs = document.querySelectorAll('.tab');
+            var tabContents = document.querySelectorAll('.tab-content');
+            
+            tabs.forEach(function(tab) { tab.classList.remove('active'); });
+            tabContents.forEach(function(content) { content.classList.remove('active'); });
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName + '-content').classList.add('active');
+        }
+
+        // ========================================
+        // 顯示/隱藏密碼功能
+        // ========================================
+        function toggleClientIdVisibility() {
+            var input = document.getElementById('googleClientId');
+            var icon = document.getElementById('clientIdEyeIcon');
+            if (input.type === 'password') { input.type = 'text'; icon.textContent = '🙈'; }
+            else { input.type = 'password'; icon.textContent = '👁️'; }
+        }
+
+        function toggleApiKeyVisibility() {
+            var input = document.getElementById('geminiApiKey');
+            var icon = document.getElementById('eyeIcon');
+            if (input.type === 'password') { input.type = 'text'; icon.textContent = '🙈'; }
+            else { input.type = 'password'; icon.textContent = '👁️'; }
+        }
+
+        function toggleLineTokenVisibility() {
+            var input = document.getElementById('lineChannelAccessToken');
+            var icon = document.getElementById('lineTokenEyeIcon');
+            if (input.type === 'password') { input.type = 'text'; icon.textContent = '🙈'; }
+            else { input.type = 'password'; icon.textContent = '👁️'; }
+        }
+
+        function toggleLineUserIdVisibility() {
+            var input = document.getElementById('lineUserId');
+            var icon = document.getElementById('lineUserIdEyeIcon');
+            if (input.type === 'password') { input.type = 'text'; icon.textContent = '🙈'; }
+            else { input.type = 'password'; icon.textContent = '👁️'; }
+        }
+
+        function toggleGasUrlVisibility() {
+            var input = document.getElementById('gasWebAppUrl');
+            var icon = document.getElementById('gasUrlEyeIcon');
+            if (input.type === 'password') { input.type = 'text'; icon.textContent = '🙈'; }
+            else { input.type = 'password'; icon.textContent = '👁️'; }
+        }
+
+        function toggleSecretKeyVisibility() {
+            var input = document.getElementById('gasSecretKey');
+            var icon = document.getElementById('secretKeyEyeIcon');
+            if (input.type === 'password') { input.type = 'text'; icon.textContent = '🙈'; }
+            else { input.type = 'password'; icon.textContent = '👁️'; }
+        }
+
+        // ========================================
+        // 清除金鑰功能
+        // ========================================
+        function clearGoogleClientId() {
+            if (confirm('確定要清除 Google OAuth Client ID 嗎？')) {
+                document.getElementById('googleClientId').value = '';
+                saveToLocalStorage();
+                showStatus('✅ 已清除 Google OAuth Client ID', 'success');
+                setTimeout(hideStatus, 2000);
+            }
+        }
+
+        function clearApiKey() {
+            if (confirm('確定要清除 Gemini API Key 嗎？')) {
+                document.getElementById('geminiApiKey').value = '';
+                saveToLocalStorage();
+                showStatus('✅ 已清除 Gemini API Key', 'success');
+                setTimeout(hideStatus, 2000);
+            }
+        }
+
+        function clearLineToken() {
+            if (confirm('確定要清除 LINE Channel Access Token 嗎？')) {
+                document.getElementById('lineChannelAccessToken').value = '';
+                saveToLocalStorage();
+                showStatus('✅ 已清除 LINE Token', 'success');
+                setTimeout(hideStatus, 2000);
+            }
+        }
+
+        function clearLineUserId() {
+            if (confirm('確定要清除 LINE User ID 嗎？')) {
+                document.getElementById('lineUserId').value = '';
+                saveToLocalStorage();
+                showStatus('✅ 已清除 LINE User ID', 'success');
+                setTimeout(hideStatus, 2000);
+            }
+        }
+
+        function clearGasUrl() {
+            if (confirm('確定要清除 Google Apps Script URL 嗎？')) {
+                document.getElementById('gasWebAppUrl').value = '';
+                saveToLocalStorage();
+                showStatus('✅ 已清除 GAS URL', 'success');
+                setTimeout(hideStatus, 2000);
+            }
+        }
+
+        function clearSecretKey() {
+            if (confirm('確定要清除安全金鑰嗎？')) {
+                document.getElementById('gasSecretKey').value = '';
+                saveToLocalStorage();
+                showStatus('✅ 已清除安全金鑰', 'success');
+                setTimeout(hideStatus, 2000);
+            }
+        }
+
+        // ========================================
+        // Checkbox 樣式更新
+        // ========================================
+        function updateCheckboxStyle(checkbox) {
+            var parent = checkbox.parentElement;
+            if (checkbox.checked) { parent.classList.add('checked'); }
+            else { parent.classList.remove('checked'); }
+        }
+
+        // ========================================
+        // 狀態訊息顯示
+        // ========================================
+        function showStatus(message, type) {
+            var statusDiv = document.getElementById('statusMessage');
+            statusDiv.textContent = message;
+            statusDiv.className = 'status-message ' + type;
+            statusDiv.style.display = 'block';
+        }
+
+        function hideStatus() {
+            var statusDiv = document.getElementById('statusMessage');
+            statusDiv.style.display = 'none';
+        }
+
+        // ========================================
+        // 檔案上傳處理
+        // ========================================
+        function handleFileUpload(event) {
+            var file = event.target.files[0];
+            if (!file) return;
+            
+            document.getElementById('fileName').textContent = '📄 ' + file.name;
+            document.getElementById('fileSize').textContent = '大小：' + (file.size / 1024).toFixed(2) + ' KB';
+            document.getElementById('fileInfo').style.display = 'block';
+            
+            showStatus('📤 正在讀取檔案...', 'info');
+
+            var reader = new FileReader();
+            var fileName = file.name.toLowerCase();
+            var fileExt = fileName.substring(fileName.lastIndexOf('.'));
+            
+            reader.onload = function(e) {
+                var content = '';
+                
+                try {
+                    if (fileExt === '.txt' || fileExt === '.csv') {
+                        content = e.target.result;
+                    } else if (fileExt === '.xls' || fileExt === '.xlsx') {
+                        var data = new Uint8Array(e.target.result);
+                        var workbook = XLSX.read(data, {type: 'array'});
+                        var firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                        content = XLSX.utils.sheet_to_csv(firstSheet);
+                    }
+                    
+                    uploadedFilesContentArray.push({ content: content, type: fileExt, name: file.name });
+                    fileUploadCount++;
+                    updateFileCountBadge();
+                    
+                    var existingText = document.getElementById('scheduleText').value.trim();
+                    if (existingText) {
+                        document.getElementById('scheduleText').value = existingText + '\n\n' + content;
+                    } else {
+                        document.getElementById('scheduleText').value = content;
+                    }
+                    
+                    showStatus('✅ 檔案已載入（共 ' + fileUploadCount + ' 個）', 'success');
+                    setTimeout(hideStatus, 2000);
+                    
+                } catch (error) {
+                    showStatus('❌ 檔案處理失敗: ' + error.message, 'error');
+                }
+            };
+            
+            if (fileExt === '.txt' || fileExt === '.csv') {
+                reader.readAsText(file);
+            } else {
+                reader.readAsArrayBuffer(file);
+            }
+        }
+
+        function handleImageUpload(event) {
+            var file = event.target.files[0];
+            if (!file) return;
+            
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var img = new Image();
+                img.onload = function() {
+                    var canvas = document.createElement('canvas');
+                    var ctx = canvas.getContext('2d');
+                    var MAX_WIDTH = 2048;
+                    var MAX_HEIGHT = 2048;
+                    var width = img.width;
+                    var height = img.height;
+
+                    if (width > MAX_WIDTH || height > MAX_HEIGHT) {
+                        if (width > height) {
+                            if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+                        } else {
+                            if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    ctx.drawImage(img, 0, 0, width, height);
+                    var compressedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+                    var base64Data = compressedDataUrl.split(',')[1];
+                    
+                    uploadedImagesArray.push(base64Data);
+                    imageUploadCount++;
+                    updateImageCountBadge();
+                    
+                    document.getElementById('imagePreview').src = compressedDataUrl;
+                    document.getElementById('imagePreview').style.display = 'block';
+                    
+                    showStatus('✅ 圖片已載入（共 ' + imageUploadCount + ' 張）', 'success');
+                    setTimeout(hideStatus, 2000);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function updateFileCountBadge() {
+            var badge = document.getElementById('fileCountBadge');
+            if (fileUploadCount > 0) {
+                badge.textContent = '已累加 ' + fileUploadCount + ' 個檔案';
+                badge.style.display = 'inline-block';
+            }
+        }
+
+        function updateImageCountBadge() {
+            var badge = document.getElementById('imageCountBadge');
+            if (imageUploadCount > 0) {
+                badge.textContent = '已累加 ' + imageUploadCount + ' 張圖片';
+                badge.style.display = 'inline-block';
+            }
+        }
+
+        // ========================================
+        // LINE 通知功能（簡化版）
+        // ========================================
+        async function testLineNotification() {
+            showStatus('📨 測試功能（請參考完整版本）', 'info');
+            setTimeout(hideStatus, 3000);
+        }
+
+        function updateLineSendOption(checkbox) {
+            showStatus(checkbox.checked ? '✅ 已啟用自動發送 LINE 通知' : 'ℹ️ 已關閉自動發送 LINE 通知', checkbox.checked ? 'success' : 'info');
+            setTimeout(hideStatus, 2000);
+        }
+
+        function saveReminderSettings() { console.log('提醒設定已儲存'); }
+        function viewScheduledReminders() { alert('請查看完整版本'); }
+        function clearAllReminders() { alert('請查看完整版本'); }
+
+        // ========================================
+        // Google API 初始化
+        // ========================================
+        function gapiLoaded() { gapi.load('client', initializeGapiClient); }
+
+        async function initializeGapiClient() {
+            await gapi.client.init({ discoveryDocs: [DISCOVERY_DOC] });
+            gapiInited = true;
+            maybeEnableButtons();
+        }
+
+        function gisLoaded() {
+            var clientId = document.getElementById('googleClientId');
+            if (clientId && clientId.value.trim()) { initTokenClient(clientId.value.trim()); }
+            if (clientId) {
+                clientId.addEventListener('change', function() {
+                    if (this.value.trim()) { initTokenClient(this.value.trim()); }
+                });
+            }
+        }
+
+        function initTokenClient(clientId) {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: clientId,
+                scope: SCOPES,
+                callback: '',
+            });
+            gisInited = true;
+            maybeEnableButtons();
+        }
+
+        function maybeEnableButtons() {
+            if (gapiInited && gisInited) {
+                document.getElementById('authorizeButton').style.display = 'block';
+            }
+        }
+
+        function handleAuthClick() {
+            tokenClient.callback = async (resp) => {
+                if (resp.error !== undefined) {
+                    showAuthStatus('❌ 授權失敗: ' + resp.error, 'error');
+                    throw (resp);
+                }
+                accessToken = gapi.client.getToken().access_token;
+                showAuthStatus('✅ 已授權存取 Google 日曆', 'success');
+                document.getElementById('authorizeButton').textContent = '✅ 已授權';
+                document.getElementById('authorizeButton').disabled = true;
+            };
+
+            if (gapi.client.getToken() === null) {
+                tokenClient.requestAccessToken({prompt: 'consent'});
+            } else {
+                tokenClient.requestAccessToken({prompt: ''});
+            }
+        }
+
+        function showAuthStatus(message, type) {
+            var statusDiv = document.getElementById('authStatus');
+            statusDiv.textContent = message;
+            statusDiv.className = 'status-message ' + type + ' show';
+            statusDiv.style.display = 'flex';
+        }
+
+        // ========================================
+        // 解析研習時程表（加入民國年轉換）
+        // ========================================
+        async function parseSchedule() {
+            var apiKey = document.getElementById('geminiApiKey').value.trim();
+            
+            if (!apiKey) {
+                showStatus('❌ 請先輸入 Gemini API Key', 'error');
+                setTimeout(hideStatus, 3000);
+                return;
+            }
+
+            var scheduleText = document.getElementById('scheduleText').value.trim();
+            var activeTabText = document.querySelector('.tab.active').textContent;
+            var activeTab = 'text';
+            if (activeTabText.indexOf('檔案') >= 0) { activeTab = 'file'; }
+            else if (activeTabText.indexOf('圖片') >= 0) { activeTab = 'image'; }
+
+            if (activeTab === 'text' && !scheduleText) {
+                showStatus('❌ 請輸入研習時程表內容', 'error');
+                setTimeout(hideStatus, 3000);
+                return;
+            }
+
+            if (activeTab === 'image' && uploadedImagesArray.length === 0) {
+                showStatus('❌ 請上傳研習時程表圖片', 'error');
+                setTimeout(hideStatus, 3000);
+                return;
+            }
+
+            document.getElementById('btnText').style.display = 'none';
+            document.getElementById('btnLoading').style.display = 'flex';
+            hideStatus();
+
+            try {
+                var now = new Date();
+                var currentYear = now.getFullYear();
+                var currentMonth = now.getMonth() + 1;
+                var currentDate = now.getDate();
+                var currentDay = now.getDay();
+                var dayNames = ['日', '一', '二', '三', '四', '五', '六'];
+                
+                var prompt = '你是一個專業的行事曆助手和 OCR 專家。請仔細解析以下研習時程表，並以 JSON 格式回傳事件資訊。\n\n';
+                prompt += '**當前日期資訊：**\n';
+                prompt += '- 今天是 ' + currentYear + '年' + currentMonth + '月' + currentDate + '日 星期' + dayNames[currentDay] + '\n\n';
+                prompt += '**請嚴格按照以下 JSON 格式回傳：**\n';
+                prompt += '{\n  "events": [\n    {\n      "title": "活動名稱",\n      "startDateTime": "2024-01-15T09:00:00",\n      "endDateTime": "2024-01-15T12:00:00",\n      "location": "地點",\n      "description": "講師、備註等"\n    }\n  ]\n}\n\n';
+                
+                // ============== 🇹🇼 民國年轉換規則（核心修改）==============
+                prompt += '**日期時間處理規則：**\n';
+                prompt += '0. **🇹🇼 民國年轉換（台灣格式，最重要！）**：\n';
+                prompt += '   - 公式：民國年 + 1911 = 西元年\n';
+                prompt += '   - 常見格式：「114年」「民國114年」「114/12/05」「114.12.05」「中華民國114年」\n';
+                prompt += '   - 範例轉換：\n';
+                prompt += '     • 114年12月5日 → 2025-12-05\n';
+                prompt += '     • 115年9月22日 → 2026-09-22\n';
+                prompt += '     • 民國113年11月21日 → 2024-11-21\n';
+                prompt += '     • 114/06/15 → 2025-06-15\n';
+                prompt += '     • 1140919 → 2025-09-19（研習編號中的日期）\n';
+                prompt += '   - **判斷方式**：如果年份數字 ≤ 200，就是民國年，需要加 1911 轉換\n';
+                prompt += '   - **注意**：台灣官方研習公告大多使用民國年格式，請務必正確識別並轉換！\n\n';
+                
+                var monthStr = currentMonth.toString();
+                var dateStr = currentDate.toString();
+                if (monthStr.length < 2) monthStr = '0' + monthStr;
+                if (dateStr.length < 2) dateStr = '0' + dateStr;
+                
+                prompt += '1. "今天"、"今日" → 使用 ' + currentYear + '-' + monthStr + '-' + dateStr + '\n';
+                prompt += '2. "明天"、"明日" → 使用今天的日期+1天\n';
+                prompt += '3. "本週五"、"週五"、"星期五" → 計算本週星期五的實際日期\n';
+                prompt += '4. startDateTime 和 endDateTime 必須是完整的 ISO 8601 格式\n';
+                prompt += '5. 如果結束時間是 24:00，請改為 23:59\n';
+                prompt += '6. 只有日期沒有時間時，預設為 09:00-12:00\n\n';
+                
+                prompt += '**🎯 台北市研習格式特殊處理：**\n';
+                prompt += '1. 忽略「北市研習字第XXXXXXXXX號」研習編號\n';
+                prompt += '2. 忽略 emoji 符號\n';
+                prompt += '3. 範例：\n';
+                prompt += '   輸入：\n';
+                prompt += '   北市研習字第1140919062號\n';
+                prompt += '   資優輔導團-【藝才領域】資優教學應用工作坊(一)\n';
+                prompt += '   時間:114年12月2日\n';
+                prompt += '   地點:古亭國中三樓會議室\n';
+                prompt += '   講師:國立苑裡高級中學鍾政岳老師\n';
+                prompt += '   \n';
+                prompt += '   正確輸出（民國年已轉為西元年）：\n';
+                prompt += '   {\n';
+                prompt += '     "title": "資優輔導團-【藝才領域】資優教學應用工作坊(一)",\n';
+                prompt += '     "startDateTime": "2025-12-02T09:00:00",\n';
+                prompt += '     "endDateTime": "2025-12-02T12:00:00",\n';
+                prompt += '     "location": "古亭國中三樓會議室",\n';
+                prompt += '     "description": "講師:國立苑裡高級中學鍾政岳老師"\n';
+                prompt += '   }\n\n';
+                
+                prompt += '**⚠️ 特別注意：**\n';
+                prompt += '- **民國年轉換**：台灣公文日期都是民國年（如114年），必須+1911轉成西元年（2025年）\n';
+                prompt += '- 只回傳純 JSON，不要包含任何 markdown 標記\n';
+                prompt += '- 最多解析 20 個事件\n\n';
+
+                var requestBody;
+
+                if (activeTab === 'text' || activeTab === 'file') {
+                    prompt += '\n\n時程表內容：\n' + scheduleText;
+                    requestBody = {
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { temperature: 0.2, topK: 40, topP: 0.95 }
+                    };
+                } else {
+                    var parts = [{ text: prompt }];
+                    for (var i = 0; i < uploadedImagesArray.length; i++) {
+                        parts.push({ inline_data: { mime_type: "image/jpeg", data: uploadedImagesArray[i] } });
+                    }
+                    requestBody = {
+                        contents: [{ parts: parts }],
+                        generationConfig: { temperature: 0.2, topK: 40, topP: 0.95 }
+                    };
+                }
+
+                var response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (!response.ok) {
+                    var errorData = await response.json();
+                    throw new Error(errorData.error && errorData.error.message ? errorData.error.message : '解析失敗');
+                }
+
+                var data = await response.json();
+                var resultText = data.candidates[0].content.parts[0].text;
+                var jsonText = resultText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                var result = JSON.parse(jsonText);
+
+                if (!result.events || result.events.length === 0) {
+                    throw new Error('未能解析出任何事件');
+                }
+
+                parsedEvents = result.events;
+                displayEventsPreview(parsedEvents);
+                showStatus('✅ 成功解析 ' + parsedEvents.length + ' 個事件！', 'success');
+                document.getElementById('importButtonsContainer').style.display = 'flex';
+
+            } catch (error) {
+                console.error('解析錯誤:', error);
+                showStatus('❌ 解析失敗：' + error.message, 'error');
+            } finally {
+                document.getElementById('btnText').style.display = 'flex';
+                document.getElementById('btnLoading').style.display = 'none';
+            }
+        }
+
+        // ========================================
+        // 顯示解析結果預覽
+        // ========================================
+        function displayEventsPreview(events) {
+            var previewDiv = document.getElementById('eventsPreview');
+            
+            events.sort(function(a, b) {
+                return new Date(a.startDateTime) - new Date(b.startDateTime);
+            });
+            
+            var html = '<h3 style="margin-bottom: 20px; color: #667eea;">📋 解析結果預覽</h3>';
+            
+            for (var i = 0; i < events.length; i++) {
+                var event = events[i];
+                var startDate = new Date(event.startDateTime);
+                var endDate = new Date(event.endDateTime);
+                var duration = Math.round((endDate - startDate) / (1000 * 60));
+                
+                html += '<div class="event-item" id="event_' + i + '">';
+                html += '<div style="display: flex; justify-content: space-between; align-items: flex-start;">';
+                html += '<div class="event-title" style="flex: 1;">' + (i + 1) + '. ' + event.title + '</div>';
+                html += '<button class="btn-delete-event" onclick="deleteEvent(' + i + ')">🗑️ 刪除</button>';
+                html += '</div>';
+                
+                html += '<div class="event-time-block">';
+                html += '<div style="margin-bottom: 12px;">';
+                html += '<label style="display: block; font-weight: 600; color: #667eea; margin-bottom: 5px;">📅 開始時間</label>';
+                html += '<div style="display: flex; gap: 10px;">';
+                html += '<input type="date" id="startDate_' + i + '" value="' + startDate.toISOString().split('T')[0] + '" style="flex: 1; padding: 8px; border: 2px solid #e0e0e0; border-radius: 8px;" onchange="updateEventDateTime(' + i + ')">';
+                html += '<input type="time" id="startTime_' + i + '" value="' + formatTime(startDate) + '" style="flex: 1; padding: 8px; border: 2px solid #e0e0e0; border-radius: 8px;" onchange="updateEventDateTime(' + i + ')">';
+                html += '</div></div>';
+                
+                html += '<div style="margin-bottom: 12px;">';
+                html += '<label style="display: block; font-weight: 600; color: #667eea; margin-bottom: 5px;">🏁 結束時間</label>';
+                html += '<div style="display: flex; gap: 10px;">';
+                html += '<input type="date" id="endDate_' + i + '" value="' + endDate.toISOString().split('T')[0] + '" style="flex: 1; padding: 8px; border: 2px solid #e0e0e0; border-radius: 8px;" onchange="updateEventDateTime(' + i + ')">';
+                html += '<input type="time" id="endTime_' + i + '" value="' + formatTime(endDate) + '" style="flex: 1; padding: 8px; border: 2px solid #e0e0e0; border-radius: 8px;" onchange="updateEventDateTime(' + i + ')">';
+                html += '</div>';
+                html += '<div style="color: #999; font-size: 0.85em; margin-top: 5px;">時長: <span id="duration_' + i + '">' + duration + '</span> 分鐘</div>';
+                html += '</div></div>';
+                
+                if (event.location) {
+                    html += '<div class="event-location">📍 ' + event.location + '</div>';
+                }
+                if (event.description) {
+                    html += '<div style="color: #666; font-size: 0.9em; margin-top: 10px;">' + event.description + '</div>';
+                }
+                
+                html += '<div class="additional-notes-section">';
+                html += '<label class="additional-notes-label">✏️ 補充說明（可選）</label>';
+                html += '<textarea class="additional-notes-input" id="additionalNotes_' + i + '" placeholder="攜帶筆電、事前準備資料..." rows="2"></textarea>';
+                html += '</div></div>';
+            }
+            
+            previewDiv.innerHTML = html;
+            previewDiv.classList.add('show');
+        }
+
+        function formatTime(date) {
+            return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
+        }
+
+        function deleteEvent(index) {
+            var eventElement = document.getElementById('event_' + index);
+            if (eventElement && confirm('確定要刪除這個事件嗎？')) {
+                eventElement.classList.add('deleted');
+                eventElement.dataset.deleted = 'true';
+            }
+        }
+
+        function updateEventDateTime(index) {
+            var startDateInput = document.getElementById('startDate_' + index);
+            var startTimeInput = document.getElementById('startTime_' + index);
+            var endDateInput = document.getElementById('endDate_' + index);
+            var endTimeInput = document.getElementById('endTime_' + index);
+            var durationSpan = document.getElementById('duration_' + index);
+            
+            if (startDateInput && startTimeInput && endDateInput && endTimeInput) {
+                var startDateTime = new Date(startDateInput.value + 'T' + startTimeInput.value);
+                var endDateTime = new Date(endDateInput.value + 'T' + endTimeInput.value);
+                
+                if (parsedEvents[index]) {
+                    parsedEvents[index].startDateTime = startDateTime.toISOString();
+                    parsedEvents[index].endDateTime = endDateTime.toISOString();
+                }
+                
+                var duration = Math.round((endDateTime - startDateTime) / (1000 * 60));
+                if (durationSpan) { durationSpan.textContent = duration; }
+            }
+        }
+
+        // ========================================
+        // Google Calendar 整合
+        // ========================================
+        async function addToGoogleCalendar() {
+            if (!isLocalServerEnvironment()) {
+                showServerGuideModal();
+                return;
+            }
+            
+            if (parsedEvents.length === 0) {
+                showStatus('❌ 沒有可匯入的事件', 'error');
+                return;
+            }
+
+            if (!accessToken) {
+                showStatus('❌ 請先授權存取 Google 日曆', 'error');
+                return;
+            }
+
+            showStatus('🚀 正在匯入事件...', 'info');
+            var successCount = 0;
+            var reminders = getSelectedReminders();
+
+            for (var i = 0; i < parsedEvents.length; i++) {
+                var eventElement = document.getElementById('event_' + i);
+                if (eventElement && eventElement.dataset.deleted === 'true') continue;
+                
+                var event = parsedEvents[i];
+                var startDateInput = document.getElementById('startDate_' + i);
+                var startTimeInput = document.getElementById('startTime_' + i);
+                var endDateInput = document.getElementById('endDate_' + i);
+                var endTimeInput = document.getElementById('endTime_' + i);
+                
+                var startDateTime = startDateInput && startTimeInput ? 
+                    new Date(startDateInput.value + 'T' + startTimeInput.value) : new Date(event.startDateTime);
+                var endDateTime = endDateInput && endTimeInput ? 
+                    new Date(endDateInput.value + 'T' + endTimeInput.value) : new Date(event.endDateTime);
+
+                var additionalNotesInput = document.getElementById('additionalNotes_' + i);
+                var finalDescription = event.description || '';
+                if (additionalNotesInput && additionalNotesInput.value.trim()) {
+                    finalDescription += '\n\n【補充說明】\n' + additionalNotesInput.value.trim();
+                }
+
+                var reminderOverrides = reminders.map(function(r) { return { method: 'popup', minutes: r }; });
+
+                var calendarEvent = {
+                    summary: event.title,
+                    location: event.location || '',
+                    description: finalDescription,
+                    start: { dateTime: startDateTime.toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+                    end: { dateTime: endDateTime.toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+                    reminders: { useDefault: false, overrides: reminderOverrides }
+                };
+
+                try {
+                    await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: calendarEvent });
+                    successCount++;
+                } catch (error) {
+                    console.error('建立事件失敗:', event.title, error);
+                }
+            }
+
+            hideStatus();
+            showResultModal(successCount, 0, [], reminders);
+        }
+
+        function showResultModal(successCount) {
+            document.getElementById('successCountDisplay').textContent = successCount;
+            document.getElementById('resultModal').classList.add('show');
+        }
+
+        function closeResultModal() { document.getElementById('resultModal').classList.remove('show'); }
+        function openGoogleCalendar() { window.open('https://calendar.google.com', '_blank'); closeResultModal(); }
+        
+        function isLocalServerEnvironment() {
+            var protocol = window.location.protocol;
+            var hostname = window.location.hostname;
+            if (protocol === 'file:') return false;
+            if (protocol === 'http:' && (hostname === '127.0.0.1' || hostname === 'localhost')) return true;
+            if (protocol === 'https:') return true;
+            return false;
+        }
+        
+        function showServerGuideModal() { document.getElementById('serverGuideModal').style.display = 'flex'; }
+        function closeServerGuideModal() { document.getElementById('serverGuideModal').style.display = 'none'; }
+
+        // ========================================
+        // ICS 檔案生成與下載
+        // ========================================
+        function downloadICS() {
+            if (parsedEvents.length === 0) {
+                showStatus('❌ 沒有可匯出的事件', 'error');
+                return;
+            }
+
+            var icsContent = 'BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Workshop Calendar Helper//EN\nCALSCALE:GREGORIAN\n';
+            var reminders = getSelectedReminders();
+
+            for (var i = 0; i < parsedEvents.length; i++) {
+                var eventElement = document.getElementById('event_' + i);
+                if (eventElement && eventElement.dataset.deleted === 'true') continue;
+
+                var event = parsedEvents[i];
+                var startDateInput = document.getElementById('startDate_' + i);
+                var startTimeInput = document.getElementById('startTime_' + i);
+                var endDateInput = document.getElementById('endDate_' + i);
+                var endTimeInput = document.getElementById('endTime_' + i);
+                
+                var startDateTime = startDateInput && startTimeInput ? 
+                    new Date(startDateInput.value + 'T' + startTimeInput.value) : new Date(event.startDateTime);
+                var endDateTime = endDateInput && endTimeInput ? 
+                    new Date(endDateInput.value + 'T' + endTimeInput.value) : new Date(event.endDateTime);
+
+                var uid = 'workshop-' + i + '-' + Date.now() + '@calendar-helper.local';
+
+                icsContent += 'BEGIN:VEVENT\n';
+                icsContent += 'UID:' + uid + '\n';
+                icsContent += 'DTSTAMP:' + formatICSDate(new Date()) + '\n';
+                icsContent += 'DTSTART:' + formatICSDate(startDateTime) + '\n';
+                icsContent += 'DTEND:' + formatICSDate(endDateTime) + '\n';
+                icsContent += 'SUMMARY:' + escapeICSText(event.title) + '\n';
+                if (event.location) icsContent += 'LOCATION:' + escapeICSText(event.location) + '\n';
+                if (event.description) icsContent += 'DESCRIPTION:' + escapeICSText(event.description) + '\n';
+
+                for (var j = 0; j < reminders.length; j++) {
+                    icsContent += 'BEGIN:VALARM\nTRIGGER:-PT' + reminders[j] + 'M\nACTION:DISPLAY\nDESCRIPTION:研習提醒\nEND:VALARM\n';
+                }
+                icsContent += 'END:VEVENT\n';
+            }
+
+            icsContent += 'END:VCALENDAR';
+
+            var blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+            var now = new Date();
+            var filename = '研習行事曆_' + now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0') + '.ics';
+
+            var link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            showStatus('✅ ICS 檔案已下載：' + filename, 'success');
+            setTimeout(hideStatus, 3000);
+        }
+
+        function formatICSDate(date) {
+            return date.getFullYear() + String(date.getMonth() + 1).padStart(2, '0') + String(date.getDate()).padStart(2, '0') + 'T' +
+                   String(date.getHours()).padStart(2, '0') + String(date.getMinutes()).padStart(2, '0') + String(date.getSeconds()).padStart(2, '0');
+        }
+
+        function escapeICSText(text) {
+            if (!text) return '';
+            return text.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n').replace(/\r/g, '');
+        }
+
+        function downloadICSFromModal() { downloadICS(); }
+
+        function getSelectedReminders() {
+            var reminders = [];
+            document.querySelectorAll('.reminder-options input[type="checkbox"]').forEach(function(checkbox) {
+                if (checkbox.checked) reminders.push(parseInt(checkbox.value));
+            });
+            return reminders;
+        }
+
+        // ========================================
+        // 頁面載入完成
+        // ========================================
+        window.addEventListener('DOMContentLoaded', function() {
+            console.log('✅ 研習工具初始化完成（支援民國年轉換）');
+            
+            var remind60Checkbox = document.querySelector('#remind60');
+            if (remind60Checkbox) {
+                remind60Checkbox.checked = true;
+                remind60Checkbox.parentElement.classList.add('checked');
+            }
+            
+            gapiLoaded();
+            gisLoaded();
+            
+            setTimeout(function() {
+                var serverStatusText = document.getElementById('serverStatusText');
+                if (serverStatusText) {
+                    if (isLocalServerEnvironment()) {
+                        serverStatusText.textContent = '✅ 環境就緒';
+                        serverStatusText.style.color = '#10b981';
+                    } else {
+                        serverStatusText.textContent = '⚠️ 需要本地伺服器';
+                        serverStatusText.style.color = '#f59e0b';
+                    }
+                }
+            }, 500);
+        });
+    </script>
+
+    <!-- 🚀 開機動畫控制腳本 -->
+    <script>
+        // 開機動畫控制
+        (function() {
+            const splash = document.getElementById('splashScreen');
+            
+            // 確保動畫至少顯示 3.5 秒（讓進度條跑完）
+            const minDisplayTime = 3500;
+            const startTime = Date.now();
+            
+            function hideSplash() {
+                const elapsed = Date.now() - startTime;
+                const remaining = Math.max(0, minDisplayTime - elapsed);
+                
+                setTimeout(() => {
+                    splash.classList.add('hide');
+                    // 動畫結束後移除元素
+                    setTimeout(() => {
+                        splash.style.display = 'none';
+                    }, 800);
+                }, remaining);
+            }
+            
+            // 頁面載入完成後隱藏
+            if (document.readyState === 'complete') {
+                hideSplash();
+            } else {
+                window.addEventListener('load', hideSplash);
+            }
+        })();
+    </script>
+</body>
+</html>
